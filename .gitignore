@@ -1,0 +1,8 @@
+.env
+*/.env
+/uploads
+/photos.db
+
+*/node_modules
+
+.idea
