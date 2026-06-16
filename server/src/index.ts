@@ -57,6 +57,10 @@ async function initOidc() {
 
 initOidc();
 
+// Helper to sanitize folder names
+const sanitizeFolderName = (name: string) => 
+  name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
 // Auth Middleware
 const isAuthenticated = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   if ((req.session as any).user) {
@@ -81,6 +85,19 @@ app.get('/api/auth/callback', async (req, res) => {
   try {
     const tokenSet = await client.callback(REDIRECT_URI, params);
     const userinfo = await client.userinfo(tokenSet);
+    
+    // Persist user in DB
+    const email = userinfo.email;
+    const name = (userinfo as any).name || (userinfo as any).preferred_username || email;
+    
+    db.prepare(`
+      INSERT INTO users (email, name, last_login) 
+      VALUES (?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(email) DO UPDATE SET 
+        name = excluded.name,
+        last_login = CURRENT_TIMESTAMP
+    `).run(email, name);
+
     (req.session as any).user = userinfo;
     res.redirect('http://localhost:5173/admin');
   } catch (err) {
@@ -99,9 +116,18 @@ app.post('/api/auth/logout', (req, res) => {
   });
 });
 
+app.get('/api/users', isAuthenticated, (req, res) => {
+  const users = db.prepare('SELECT id, email, name, last_login FROM users ORDER BY last_login DESC').all();
+  res.json(users);
+});
+
 // --- Gallery Routes ---
 app.get('/api/albums', (req, res) => {
-  const albums = db.prepare('SELECT * FROM albums ORDER BY date DESC').all();
+  const albums = db.prepare(`
+    SELECT a.*, (SELECT filename FROM photos WHERE album_id = a.id LIMIT 1) as cover_photo 
+    FROM albums a 
+    ORDER BY date DESC
+  `).all();
   res.json(albums);
 });
 
@@ -113,7 +139,19 @@ app.get('/api/albums/:id', (req, res) => {
 
 // --- Protected Routes ---
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadsDir),
+  destination: (req, file, cb) => {
+    const albumId = req.params.id;
+    const album = db.prepare('SELECT name FROM albums WHERE id = ?').get(albumId) as any;
+    if (!album) return cb(new Error('Album not found'), '');
+    
+    const folderName = sanitizeFolderName(album.name);
+    const albumDir = path.join(uploadsDir, folderName);
+    
+    if (!fs.existsSync(albumDir)) {
+      fs.mkdirSync(albumDir, { recursive: true });
+    }
+    cb(null, albumDir);
+  },
   filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
 });
 const upload = multer({ storage });
@@ -124,13 +162,37 @@ app.post('/api/albums', isAuthenticated, (req, res) => {
   res.json({ id: info.lastInsertRowid, name });
 });
 
+app.patch('/api/albums/:id', isAuthenticated, (req, res) => {
+  const { date, name } = req.body;
+  db.prepare('UPDATE albums SET date = ?, name = ? WHERE id = ?').run(date, name, req.params.id);
+  res.json({ success: true });
+});
+
+app.delete('/api/photos/:id', isAuthenticated, (req, res) => {
+  const photo = db.prepare('SELECT filename FROM photos WHERE id = ?').get(req.params.id) as any;
+  if (photo) {
+    const filePath = path.join(uploadsDir, photo.filename);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    db.prepare('DELETE FROM photos WHERE id = ?').run(req.params.id);
+  }
+  res.json({ success: true });
+});
+
 app.post('/api/albums/:id/upload', isAuthenticated, upload.array('photos'), (req, res) => {
   const albumId = req.params.id;
   const files = req.files as Express.Multer.File[];
   
+  const album = db.prepare('SELECT name FROM albums WHERE id = ?').get(albumId) as any;
+  const folderName = sanitizeFolderName(album.name);
+
   const insert = db.prepare('INSERT INTO photos (album_id, filename) VALUES (?, ?)');
   const transaction = db.transaction((photos: any[]) => {
-    for (const photo of photos) insert.run(albumId, photo.filename);
+    for (const photo of photos) {
+      // Store relative path (folder/filename) in DB
+      insert.run(albumId, `${folderName}/${photo.filename}`);
+    }
   });
 
   transaction(files);

@@ -18,6 +18,13 @@ db.exec(`
     filename TEXT NOT NULL,
     FOREIGN KEY (album_id) REFERENCES albums (id)
   );
+
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT UNIQUE NOT NULL,
+    name TEXT,
+    last_login DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 export default db;

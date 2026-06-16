@@ -1,17 +1,21 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { LogIn, LogOut, Plus, Upload, FolderPlus, User as UserIcon, Loader2 } from 'lucide-react';
+import { LogIn, LogOut, Plus, Upload, FolderPlus, User as UserIcon, Loader2, Edit } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 interface User {
+  id?: number;
   email?: string;
   name?: string;
+  last_login?: string;
 }
 
 const AdminDashboard = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [albumName, setAlbumName] = useState('');
-  const [albums, setAlbums] = useState<{ id: number; name: string }[]>([]);
+  const [albums, setAlbums] = useState<{ id: number; name: string; date: string }[]>([]);
   const [selectedAlbum, setSelectedAlbum] = useState<string>('');
   const [files, setFiles] = useState<FileList | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -19,6 +23,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     checkAuth();
     fetchAlbums();
+    fetchUsers();
   }, []);
 
   const checkAuth = async () => {
@@ -39,6 +44,15 @@ const AdminDashboard = () => {
       if (res.data.length > 0 && !selectedAlbum) setSelectedAlbum(res.data[0].id.toString());
     } catch (err) {
       console.error('Failed to fetch albums', err);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const res = await axios.get('http://localhost:3001/api/users', { withCredentials: true });
+      setUsers(res.data);
+    } catch (err) {
+      console.error('Failed to fetch users', err);
     }
   };
 
@@ -111,9 +125,9 @@ const AdminDashboard = () => {
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Admin Access</h1>
           <p className="text-gray-500 mb-8">Please log in to manage your albums and upload new photos.</p>
-          <button 
-            onClick={handleLogin} 
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
+          <button
+            onClick={handleLogin}
+            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors cursor-pointer"
           >
             <LogIn size={20} />
             Login via OIDC
@@ -135,8 +149,8 @@ const AdminDashboard = () => {
             <p className="text-sm text-gray-500">Managing Photo Library</p>
           </div>
         </div>
-        <button 
-          onClick={handleLogout} 
+        <button
+          onClick={handleLogout}
           className="flex items-center gap-2 text-gray-500 hover:text-red-600 font-medium transition-colors"
         >
           <LogOut size={20} />
@@ -156,17 +170,17 @@ const AdminDashboard = () => {
           <form onSubmit={handleCreateAlbum} className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">Album Name</label>
-              <input 
-                type="text" 
-                placeholder="e.g. Summer Vacation 2026" 
-                value={albumName} 
-                onChange={(e) => setAlbumName(e.target.value)} 
+              <input
+                type="text"
+                placeholder="e.g. Summer Vacation 2026"
+                value={albumName}
+                onChange={(e) => setAlbumName(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                required 
+                required
               />
             </div>
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
             >
               <Plus size={20} />
@@ -186,8 +200,8 @@ const AdminDashboard = () => {
           <form onSubmit={handleUpload} className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">Select Album</label>
-              <select 
-                value={selectedAlbum} 
+              <select
+                value={selectedAlbum}
                 onChange={(e) => setSelectedAlbum(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all appearance-none bg-white"
               >
@@ -197,16 +211,16 @@ const AdminDashboard = () => {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">Select Photos</label>
-              <input 
-                type="file" 
-                multiple 
-                onChange={(e) => setFiles(e.target.files)} 
+              <input
+                type="file"
+                multiple
+                onChange={(e) => setFiles(e.target.files)}
                 className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-                required 
+                required
               />
             </div>
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
               disabled={uploading || albums.length === 0}
             >
@@ -225,6 +239,81 @@ const AdminDashboard = () => {
           </form>
         </section>
       </div>
+
+      {/* Manage Albums Section */}
+      <section className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-amber-50 text-amber-600 rounded-lg">
+            <Edit size={24} />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900">Manage Albums</h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {albums.map(a => (
+            <div key={a.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100 hover:border-blue-200 transition-colors group">
+              <div className="truncate pr-4">
+                <p className="font-semibold text-gray-900 truncate">{a.name}</p>
+                <p className="text-xs text-gray-500">{new Date(a.date).toLocaleDateString()}</p>
+              </div>
+              <Link 
+                to={`/admin/edit/${a.id}`}
+                className="p-2 bg-white text-gray-400 hover:text-blue-600 rounded-lg border border-gray-200 shadow-sm hover:border-blue-200 transition-all"
+              >
+                <Edit size={18} />
+              </Link>
+            </div>
+          ))}
+          {albums.length === 0 && (
+            <p className="col-span-full text-center py-6 text-gray-400 italic">No albums created yet.</p>
+          )}
+        </div>
+      </section>
+
+      {/* User Management Section */}
+      <section className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+            <UserIcon size={24} />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900">User Management</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-gray-100">
+                <th className="pb-4 font-semibold text-gray-600">User</th>
+                <th className="pb-4 font-semibold text-gray-600">Email</th>
+                <th className="pb-4 font-semibold text-gray-600 text-right">Last Login</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {users.map((u) => (
+                <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center font-medium text-xs">
+                        {(u.name || u.email || 'U')[0].toUpperCase()}
+                      </div>
+                      <span className="font-medium text-gray-900">{u.name}</span>
+                    </div>
+                  </td>
+                  <td className="py-4 text-gray-500">{u.email}</td>
+                  <td className="py-4 text-right text-gray-500 text-sm">
+                    {u.last_login ? new Date(u.last_login).toLocaleString() : 'Never'}
+                  </td>
+                </tr>
+              ))}
+              {users.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="py-10 text-center text-gray-400">
+                    No users found in the system.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 };
