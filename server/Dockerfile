@@ -1,24 +1,24 @@
-# Backend Dockerfile
-FROM node:22-slim
+# ---- build stage ----
+FROM node:22-alpine AS build
 
 WORKDIR /app
-
-# Install build dependencies for better-sqlite3 (native addon)
-RUN apt-get update && apt-get install -y \
-    python3 \
-    make \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 RUN npm install
 
 COPY . .
 
-# Build the project (if needed, though we run ts-node-dev for simplicity in this base)
-# In production, you'd run 'npm run build' and use the dist/ folder
-RUN npm install -g ts-node-dev
+RUN npm run build
 
-EXPOSE 3001
+# ---- runtime stage ----
+FROM node:22-alpine
 
-CMD ["npm", "run", "dev"]
+WORKDIR /app
+
+RUN npm install -g serve
+
+COPY --from=build /app/dist ./dist
+
+EXPOSE 5173
+
+CMD ["serve", "-s", "dist", "-l", "5173"]

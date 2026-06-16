@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
+import api, { getUploadsUrl } from '../api';
 import { Calendar, ChevronRight, Image as ImageIcon } from 'lucide-react';
 
 interface Album {
@@ -14,7 +14,7 @@ const AlbumList = () => {
   const [albums, setAlbums] = useState<Album[]>([]);
 
   useEffect(() => {
-    axios.get('http://localhost:3001/api/albums')
+    api.get('/albums')
       .then(res => setAlbums(res.data))
       .catch(err => console.error('Failed to fetch albums', err));
   }, []);
@@ -37,11 +37,12 @@ const AlbumList = () => {
           >
             <div className="aspect-video w-full bg-gray-100 relative overflow-hidden border-b border-gray-100">
               {album.cover_photo ? (
-                <img
-                  src={`http://localhost:3001/uploads/${album.cover_photo}`}
+                <img 
+                  src={getUploadsUrl(album.cover_photo)} 
                   alt={album.name}
-                  className="w-full h-full object-cover transition-transform duration-500"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
+
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-gray-300">
                   <ImageIcon size={48} />

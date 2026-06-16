@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../api';
 import { LogIn, LogOut, Plus, Upload, FolderPlus, User as UserIcon, Loader2, Edit } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -28,7 +28,7 @@ const AdminDashboard = () => {
 
   const checkAuth = async () => {
     try {
-      const res = await axios.get('http://localhost:3001/api/auth/me', { withCredentials: true });
+      const res = await api.get('/auth/me');
       setUser(res.data);
     } catch (err) {
       setUser(null);
@@ -39,7 +39,7 @@ const AdminDashboard = () => {
 
   const fetchAlbums = async () => {
     try {
-      const res = await axios.get('http://localhost:3001/api/albums');
+      const res = await api.get('/albums');
       setAlbums(res.data);
       if (res.data.length > 0 && !selectedAlbum) setSelectedAlbum(res.data[0].id.toString());
     } catch (err) {
@@ -49,7 +49,7 @@ const AdminDashboard = () => {
 
   const fetchUsers = async () => {
     try {
-      const res = await axios.get('http://localhost:3001/api/users', { withCredentials: true });
+      const res = await api.get('/users');
       setUsers(res.data);
     } catch (err) {
       console.error('Failed to fetch users', err);
@@ -57,12 +57,13 @@ const AdminDashboard = () => {
   };
 
   const handleLogin = () => {
-    window.location.href = 'http://localhost:3001/api/auth/login';
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    window.location.href = `${API_URL}/api/auth/login`;
   };
 
   const handleLogout = async () => {
     try {
-      await axios.post('http://localhost:3001/api/auth/logout', {}, { withCredentials: true });
+      await api.post('/auth/logout', {});
       window.location.reload();
     } catch (err) {
       console.error('Logout failed', err);
@@ -72,7 +73,7 @@ const AdminDashboard = () => {
   const handleCreateAlbum = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:3001/api/albums', { name: albumName }, { withCredentials: true });
+      await api.post('/albums', { name: albumName });
       setAlbumName('');
       fetchAlbums();
       alert('Album created successfully!');
@@ -92,8 +93,7 @@ const AdminDashboard = () => {
     }
 
     try {
-      await axios.post(`http://localhost:3001/api/albums/${selectedAlbum}/upload`, formData, {
-        withCredentials: true,
+      await api.post(`/albums/${selectedAlbum}/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       alert('Photos uploaded successfully!');

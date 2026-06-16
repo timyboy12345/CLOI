@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import axios from 'axios';
+import api, { getUploadsUrl } from '../api';
 import { ArrowLeft, Image as ImageIcon, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface Photo {
@@ -21,7 +21,7 @@ const PhotoGallery = () => {
 
   useEffect(() => {
     setLoading(true);
-    axios.get(`http://localhost:3001/api/albums/${id}`)
+    api.get(`/albums/${id}`)
       .then(res => {
         setData(res.data);
         setLoading(false);
@@ -97,12 +97,13 @@ const PhotoGallery = () => {
             onClick={() => setSelectedIndex(index)}
             className="aspect-square overflow-hidden bg-gray-100 group relative shadow-sm transition-all duration-300 cursor-pointer"
           >
-            <img
-              src={`http://localhost:3001/uploads/${photo.filename}`}
-              alt="Event"
-              className="w-full h-full object-cover transform transition-transform duration-500"
+            <img 
+              src={getUploadsUrl(photo.filename)} 
+              alt="Event" 
+              className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
               loading="lazy"
             />
+
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
           </div>
         ))}
@@ -133,13 +134,12 @@ const PhotoGallery = () => {
           </button>
 
           <div className="relative w-full h-full flex items-center justify-center p-4 md:p-12">
-            <img
-              src={`http://localhost:3001/uploads/${data.photos[selectedIndex].filename}`}
-              alt="Full size"
+            <img 
+              src={getUploadsUrl(data.photos[selectedIndex].filename)} 
+              alt="Full size" 
               className="max-w-full max-h-full object-contain shadow-2xl animate-in zoom-in-95 duration-200"
             />
           </div>
-
           <button
             onClick={nextPhoto}
             className="absolute right-6 p-3 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-all z-50"
