@@ -13,9 +13,11 @@ services:
       - "3001:3001"
     volumes:
       - sqlite_data:/data
+      - uploads:/data/uploads
     restart: always
     environment:
       - ./server/.env
 
 volumes:
   sqlite_data:
+  uploads:
