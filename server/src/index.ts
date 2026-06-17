@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
@@ -6,9 +9,6 @@ import path from 'path';
 import fs from 'fs';
 import { Issuer, Strategy, Client } from 'openid-client';
 import db from './db';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 const app = express();
 const port: string = process.env.PORT || '3001';
