@@ -57,7 +57,7 @@ const AdminDashboard = () => {
   };
 
   const handleLogin = () => {
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const API_URL = import.meta.env.SERVER_URL || 'http://localhost:3001';
     window.location.href = `${API_URL}/api/auth/login`;
   };
 
@@ -255,7 +255,7 @@ const AdminDashboard = () => {
                 <p className="font-semibold text-gray-900 truncate">{a.name}</p>
                 <p className="text-xs text-gray-500">{new Date(a.date).toLocaleDateString()}</p>
               </div>
-              <Link 
+              <Link
                 to={`/admin/edit/${a.id}`}
                 className="p-2 bg-white text-gray-400 hover:text-blue-600 rounded-lg border border-gray-200 shadow-sm hover:border-blue-200 transition-all"
               >

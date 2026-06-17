@@ -9,6 +9,7 @@ services:
     environment:
       CLIENT_PORT: ${CLIENT_PORT}
       CLIENT_URL: ${CLIENT_URL}
+      SERVER_URL: ${SERVER_URL}
 
   server:
     build: ./server
