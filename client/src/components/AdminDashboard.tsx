@@ -57,7 +57,7 @@ const AdminDashboard = () => {
   };
 
   const handleLogin = () => {
-    const API_URL = import.meta.env.SERVER_URL || 'http://localhost:3001';
+    const API_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
     window.location.href = `${API_URL}/api/auth/login`;
   };
 

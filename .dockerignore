@@ -1,6 +1,5 @@
 node_modules
 dist
-.env.client
 photos.db
 uploads
 *.db
