@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import api, { getUploadsUrl } from '../api';
 import { ArrowLeft, Image as ImageIcon, X, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
+import { isAxiosError } from 'axios';
 
 interface Photo {
   id: number;
@@ -34,8 +35,8 @@ const PhotoGallery = () => {
       });
       setData(res.data);
       setRequiresPassword(false);
-    } catch (err: any) {
-      if (err?.response?.status === 403 && err?.response?.data?.requiresPassword) {
+    } catch (err: unknown) {
+      if (isAxiosError(err) && err.response?.status === 403 && err.response?.data?.requiresPassword) {
         setRequiresPassword(true);
         if (searchParams.get('pass')) {
           setPasswordError('Onjuist wachtwoord.');
@@ -52,10 +53,6 @@ const PhotoGallery = () => {
   useEffect(() => {
     fetchAlbum();
   }, [fetchAlbum]);
-
-  useEffect(() => {
-    setPassword(searchParams.get('pass') || '');
-  }, [searchParams]);
 
   useEffect(() => {
     if (data?.album.name) {
