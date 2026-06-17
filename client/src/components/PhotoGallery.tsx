@@ -153,7 +153,7 @@ const PhotoGallery = () => {
             <ChevronRight size={32} />
           </button>
 
-          <div className="absolute flex flex-row gap-4 bottom-6 left-1/2 -translate-x-1/2">
+          <div className="text-nowrap absolute flex flex-row gap-2 lg:gap-4 bottom-6 left-1/2 -translate-x-1/2">
               <div className="px-4 py-2 bg-black/40 backdrop-blur-md rounded-full text-white/80 text-sm font-medium">
                   {selectedIndex + 1} / {data.photos.length}
               </div>
