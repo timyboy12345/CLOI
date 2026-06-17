@@ -9,7 +9,7 @@ const api = axios.create({
 
 export const getUploadsUrl = (path: string) => {
   if (!path) return '';
-  return `${API_URL}/uploads/${path}`;
+  return `${API_URL}/api/uploads/${path}`;
 };
 
 export default api;

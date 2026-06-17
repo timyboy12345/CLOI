@@ -37,10 +37,10 @@ const AlbumList = () => {
           >
             <div className="aspect-video w-full bg-gray-100 relative overflow-hidden border-b border-gray-100">
               {album.cover_photo ? (
-                <img 
-                  src={getUploadsUrl(album.cover_photo)} 
+                <img
+                  src={getUploadsUrl(album.cover_photo)}
                   alt={album.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  className="w-full h-full object-cover transition-transform duration-500"
                 />
 
               ) : (

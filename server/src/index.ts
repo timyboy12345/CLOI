@@ -137,6 +137,23 @@ app.get('/api/albums/:id', (req, res) => {
   res.json({ album, photos });
 });
 
+app.get("/api/uploads/:folder/:file", (req, res) => {
+  const { folder, file } = req.params;
+
+  const filePath = path.join(uploadsDir, folder, file);
+
+  // prevent path traversal
+  if (!filePath.startsWith(uploadsDir)) {
+    return res.sendStatus(403);
+  }
+
+  fs.access(filePath, fs.constants.F_OK, (err) => {
+    if (err) return res.sendStatus(404);
+
+    res.sendFile(filePath);
+  });
+});
+
 // --- Protected Routes ---
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {

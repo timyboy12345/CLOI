@@ -97,10 +97,10 @@ const PhotoGallery = () => {
             onClick={() => setSelectedIndex(index)}
             className="aspect-square overflow-hidden bg-gray-100 group relative shadow-sm transition-all duration-300 cursor-pointer"
           >
-            <img 
-              src={getUploadsUrl(photo.filename)} 
-              alt="Event" 
-              className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
+            <img
+              src={getUploadsUrl(photo.filename)}
+              alt="Event"
+              className="w-full h-full object-cover transform transition-transform duration-500"
               loading="lazy"
             />
 
@@ -134,9 +134,9 @@ const PhotoGallery = () => {
           </button>
 
           <div className="relative w-full h-full flex items-center justify-center p-4 md:p-12">
-            <img 
-              src={getUploadsUrl(data.photos[selectedIndex].filename)} 
-              alt="Full size" 
+            <img
+              src={getUploadsUrl(data.photos[selectedIndex].filename)}
+              alt="Full size"
               className="max-w-full max-h-full object-contain shadow-2xl animate-in zoom-in-95 duration-200"
             />
           </div>
