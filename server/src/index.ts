@@ -7,6 +7,7 @@ import multer from 'multer';
 import session from 'express-session';
 import path from 'path';
 import fs from 'fs';
+import sharp from 'sharp';
 import { Issuer, Strategy, Client } from 'openid-client';
 import db from './db';
 
@@ -18,6 +19,60 @@ const uploadsDir = process.env.UPLOADS_PATH || path.join(__dirname, '../uploads'
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
+
+const THUMBNAIL_SUFFIX = '.thumb.webp';
+const COMPRESSED_SUFFIX = '.compressed.webp';
+const currentlyProcessingPhotos = new Set<string>();
+
+const getVariantPaths = (originalPath: string) => {
+  const parsedPath = path.parse(originalPath);
+  return {
+    thumbnailPath: path.join(parsedPath.dir, `${parsedPath.name}${THUMBNAIL_SUFFIX}`),
+    compressedPath: path.join(parsedPath.dir, `${parsedPath.name}${COMPRESSED_SUFFIX}`)
+  };
+};
+
+const processPhotoVariants = async (relativeFilename: string) => {
+  if (currentlyProcessingPhotos.has(relativeFilename)) return;
+  currentlyProcessingPhotos.add(relativeFilename);
+
+  try {
+    const sourcePath = path.join(uploadsDir, relativeFilename);
+    if (!fs.existsSync(sourcePath)) return;
+
+    const { thumbnailPath, compressedPath } = getVariantPaths(sourcePath);
+    const sourceBuffer = await fs.promises.readFile(sourcePath);
+    const baseImage = sharp(sourceBuffer, { failOn: 'none' }).rotate();
+
+    if (!fs.existsSync(thumbnailPath)) {
+      await baseImage
+        .clone()
+        .resize(320, 320, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 70 })
+        .toFile(thumbnailPath);
+    }
+
+    if (!fs.existsSync(compressedPath)) {
+      await baseImage
+        .clone()
+        .webp({ quality: 65 })
+        .toFile(compressedPath);
+    }
+  } catch (err) {
+    console.error(`Failed variant generation for ${relativeFilename}:`, err);
+  } finally {
+    currentlyProcessingPhotos.delete(relativeFilename);
+  }
+};
+
+const processPhotosInBackground = (relativeFilenames: string[]) => {
+  void Promise.allSettled(relativeFilenames.map((filename) => processPhotoVariants(filename)));
+};
+
+const processAllPhotosInBackground = () => {
+  const photos = db.prepare('SELECT filename FROM photos').all() as { filename: string }[];
+  processPhotosInBackground(photos.map((photo) => photo.filename));
+};
 
 app.use(cors({origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true}));
 app.use(express.json());
@@ -172,9 +227,20 @@ app.delete('/api/photos/:id', isAuthenticated, (req, res) => {
   const photo = db.prepare('SELECT filename FROM photos WHERE id = ?').get(req.params.id) as any;
   if (photo) {
     const filePath = path.join(uploadsDir, photo.filename);
+    const { thumbnailPath, compressedPath } = getVariantPaths(filePath);
+
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
+
+    if (fs.existsSync(thumbnailPath)) {
+      fs.unlinkSync(thumbnailPath);
+    }
+
+    if (fs.existsSync(compressedPath)) {
+      fs.unlinkSync(compressedPath);
+    }
+
     db.prepare('DELETE FROM photos WHERE id = ?').run(req.params.id);
   }
   res.json({ success: true });
@@ -196,8 +262,12 @@ app.post('/api/albums/:id/upload', isAuthenticated, upload.array('photos'), (req
   });
 
   transaction(files);
+  processPhotosInBackground(files.map((photo) => `${folderName}/${photo.filename}`));
   res.json({ success: true, count: files.length });
 });
+
+processAllPhotosInBackground();
+setInterval(processAllPhotosInBackground, 60 * 60 * 1000);
 
 app.listen(parseInt(port), '0.0.0.0', () => {
   console.log(`Server running at http://localhost:${port}`);
