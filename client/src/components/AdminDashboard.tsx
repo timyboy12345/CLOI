@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import {useNavigate} from 'react-router-dom';
 import api from '../api';
 import { LogIn, LogOut, Plus, FolderPlus, User as UserIcon, Loader2, Edit } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -22,6 +23,8 @@ const AdminDashboard = () => {
     fetchAlbums();
     fetchUsers();
   }, []);
+
+  let navigate = useNavigate();
 
   const checkAuth = async () => {
     try {
@@ -71,10 +74,12 @@ const AdminDashboard = () => {
   const handleCreateAlbum = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/albums', { name: albumName });
+      const res = await api.post('/albums', {name: albumName});
       setAlbumName('');
       fetchAlbums();
-      alert('Album created successfully!');
+      if (res.data?.id) {
+        navigate(`/albums/${res.data.id}`);
+      }
     } catch (err) {
       alert('Failed to create album. Please ensure you are logged in.');
     }

@@ -186,6 +186,7 @@ const EditAlbum = () => {
                                 <input
                                     type="file"
                                     multiple
+                                    accept="image/*,video/*"
                                     onChange={(e) => setFiles(e.target.files)}
                                     className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-red-50 file:text-red-900 hover:file:bg-red-100 cursor-pointer"
                                     required
