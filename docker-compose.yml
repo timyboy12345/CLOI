@@ -4,10 +4,6 @@ services:
     ports:
       - "5173:80"
     restart: always
-    environment:
-      CLIENT_PORT: ${CLIENT_PORT}
-      CLIENT_URL: ${CLIENT_URL}
-      SERVER_URL: ${SERVER_URL}
 
   server:
     build: ./server
@@ -17,7 +13,6 @@ services:
       - ./uploads:/app/uploads
       - ./photos.db:/app/photos.db
     restart: always
-
 
 volumes:
   uploads:
