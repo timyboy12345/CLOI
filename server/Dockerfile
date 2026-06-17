@@ -18,7 +18,6 @@ COPY package*.json ./
 RUN npm install --omit=dev
 
 COPY --from=build /app/dist ./dist
-COPY .env ./
 
 EXPOSE 3001
 
