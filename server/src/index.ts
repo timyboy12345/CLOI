@@ -37,6 +37,8 @@ const processPhotoVariants = async (relativeFilename: string) => {
   if (currentlyProcessingPhotos.has(relativeFilename)) return;
   currentlyProcessingPhotos.add(relativeFilename);
 
+  console.log('Processing photo:', relativeFilename);
+
   try {
     const sourcePath = path.join(uploadsDir, relativeFilename);
     if (!fs.existsSync(sourcePath)) return;
@@ -46,6 +48,8 @@ const processPhotoVariants = async (relativeFilename: string) => {
     const baseImage = sharp(sourceBuffer, { failOn: 'none' }).rotate();
 
     if (!fs.existsSync(thumbnailPath)) {
+      console.log('Generating thumbnail for:', relativeFilename);
+
       await baseImage
         .clone()
         .resize(520, 520, { fit: 'inside', withoutEnlargement: true })
@@ -54,6 +58,8 @@ const processPhotoVariants = async (relativeFilename: string) => {
     }
 
     if (!fs.existsSync(compressedPath)) {
+      console.log('Generating compressed variant for:', relativeFilename);
+
       await baseImage
         .clone()
         .webp({ quality: 90 })

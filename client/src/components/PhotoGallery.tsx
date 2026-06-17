@@ -101,7 +101,7 @@ const PhotoGallery = () => {
           <div
             key={photo.id}
             onClick={() => setSelectedIndex(index)}
-            className="aspect-square overflow-hidden bg-gray-100 group relative shadow-sm transition-all duration-300 cursor-pointer"
+            className="aspect-square overflow-hidden bg-gray-100 group relative transition-all duration-300 cursor-pointer"
           >
             <img
               src={getUploadsUrl(photo.filename, 'webp')}
@@ -143,7 +143,7 @@ const PhotoGallery = () => {
             <img
               src={getUploadsUrl(data.photos[selectedIndex].filename, 'original')}
               alt="Full size"
-              className="max-w-full max-h-full object-contain shadow-2xl animate-in zoom-in-95 duration-200"
+              className="max-w-full max-h-full object-contain animate-in zoom-in-95 duration-200"
             />
           </div>
           <button
