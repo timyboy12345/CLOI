@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../api';
-import { LogIn, LogOut, Plus, Upload, FolderPlus, User as UserIcon, Loader2, Edit } from 'lucide-react';
+import { LogIn, LogOut, Plus, FolderPlus, User as UserIcon, Loader2, Edit } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface User {
@@ -16,9 +16,6 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [albumName, setAlbumName] = useState('');
   const [albums, setAlbums] = useState<{ id: number; name: string; date: string }[]>([]);
-  const [selectedAlbum, setSelectedAlbum] = useState<string>('');
-  const [files, setFiles] = useState<FileList | null>(null);
-  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -41,7 +38,6 @@ const AdminDashboard = () => {
     try {
       const res = await api.get('/albums');
       setAlbums(res.data);
-      if (res.data.length > 0 && !selectedAlbum) setSelectedAlbum(res.data[0].id.toString());
     } catch (err) {
       console.error('Failed to fetch albums', err);
     }
@@ -79,32 +75,6 @@ const AdminDashboard = () => {
       alert('Album created successfully!');
     } catch (err) {
       alert('Failed to create album. Please ensure you are logged in.');
-    }
-  };
-
-  const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!files || !selectedAlbum) return;
-
-    setUploading(true);
-    const formData = new FormData();
-    for (let i = 0; i < files.length; i++) {
-      formData.append('photos', files[i]);
-    }
-
-    try {
-      await api.post(`/albums/${selectedAlbum}/upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      alert('Photos uploaded successfully!');
-      setFiles(null);
-      // Reset file input
-      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-      if (fileInput) fileInput.value = '';
-    } catch (err) {
-      alert('Upload failed. Please ensure you are logged in.');
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -158,7 +128,7 @@ const AdminDashboard = () => {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 gap-8">
         {/* Create Album Section */}
         <section className="bg-white p-8 rounded-2xl border border-gray-200 space-y-6">
           <div className="flex items-center gap-3">
@@ -185,56 +155,6 @@ const AdminDashboard = () => {
             >
               <Plus size={20} />
               Album aanmaken
-            </button>
-          </form>
-        </section>
-
-        {/* Upload Photos Section */}
-        <section className="bg-white p-8 rounded-2xl border border-gray-200 space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-50 text-green-600 rounded-lg">
-              <Upload size={24} />
-            </div>
-            <h2 className="text-xl font-bold text-gray-900">Upload Photos</h2>
-          </div>
-          <form onSubmit={handleUpload} className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">Select Album</label>
-              <select
-                value={selectedAlbum}
-                onChange={(e) => setSelectedAlbum(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-900 focus:border-transparent transition-all appearance-none bg-white"
-              >
-                {albums.length === 0 && <option disabled>No albums available</option>}
-                {albums.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">Select Photos</label>
-              <input
-                type="file"
-                multiple
-                onChange={(e) => setFiles(e.target.files)}
-                className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-red-50 file:text-red-900 hover:file:bg-red-100 cursor-pointer"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
-              disabled={uploading || albums.length === 0}
-            >
-              {uploading ? (
-                <>
-                  <Loader2 className="animate-spin" size={20} />
-                  Uploading...
-                </>
-              ) : (
-                <>
-                  <Upload size={20} />
-                  Upload Photos
-                </>
-              )}
             </button>
           </form>
         </section>

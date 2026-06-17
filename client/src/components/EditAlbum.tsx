@@ -1,7 +1,7 @@
 import {useState, useEffect} from 'react';
 import {useParams, Link} from 'react-router-dom';
 import api, {getUploadsUrl} from '../api';
-import {ArrowLeft, Trash2, Save, Calendar as CalendarIcon, Loader2, Image as ImageIcon} from 'lucide-react';
+import {ArrowLeft, Trash2, Save, Calendar as CalendarIcon, Loader2, Image as ImageIcon, Upload} from 'lucide-react';
 
 interface Photo {
     id: number;
@@ -18,8 +18,12 @@ const EditAlbum = () => {
     const [data, setData] = useState<AlbumData | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [uploading, setUploading] = useState(false);
     const [albumDate, setAlbumDate] = useState('');
     const [albumName, setAlbumName] = useState('');
+    const [files, setFiles] = useState<FileList | null>(null);
+    const [uploadTotal, setUploadTotal] = useState(0);
+    const [uploadedCount, setUploadedCount] = useState(0);
 
     useEffect(() => {
         fetchAlbum();
@@ -64,6 +68,37 @@ const EditAlbum = () => {
             } : null);
         } catch (err) {
             alert('Failed to delete photo.');
+        }
+    };
+
+    const handleUpload = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!files || files.length === 0) return;
+
+        setUploading(true);
+        setUploadTotal(files.length);
+        setUploadedCount(0);
+
+        try {
+            for (let i = 0; i < files.length; i++) {
+                const formData = new FormData();
+                formData.append('photos', files[i]);
+
+                await api.post(`/albums/${id}/upload`, formData, {
+                    headers: {'Content-Type': 'multipart/form-data'},
+                    withCredentials: true
+                });
+
+                setUploadedCount(i + 1);
+            }
+
+            await fetchAlbum();
+            setFiles(null);
+            alert('Photos uploaded successfully!');
+        } catch (err) {
+            alert('Upload failed. Please ensure you are logged in.');
+        } finally {
+            setUploading(false);
         }
     };
 
@@ -134,6 +169,55 @@ const EditAlbum = () => {
                         Manage Photos ({data.photos.length})
                     </h2>
                 </div>
+
+                <section className="bg-white p-6 rounded-2xl border border-gray-200 space-y-4">
+                    <div className="flex items-center gap-2">
+                        <Upload size={20} className="text-red-900"/>
+                        <h3 className="text-lg font-semibold text-gray-900">Upload foto's</h3>
+                    </div>
+                    <form onSubmit={handleUpload} className="space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Selecteer foto's</label>
+                            <input
+                                type="file"
+                                multiple
+                                onChange={(e) => setFiles(e.target.files)}
+                                className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-red-50 file:text-red-900 hover:file:bg-red-100 cursor-pointer"
+                                required
+                            />
+                        </div>
+                        {uploading && uploadTotal > 0 && (
+                            <div className="space-y-2">
+                                <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-red-600 transition-all"
+                                        style={{width: `${(uploadedCount / uploadTotal) * 100}%`}}
+                                    />
+                                </div>
+                                <p className="text-sm text-gray-600">
+                                    {uploadedCount}/{uploadTotal} foto's geüpload · Nog {uploadTotal - uploadedCount} te gaan
+                                </p>
+                            </div>
+                        )}
+                        <button
+                            type="submit"
+                            className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
+                            disabled={uploading}
+                        >
+                            {uploading ? (
+                                <>
+                                    <Loader2 className="animate-spin" size={20}/>
+                                    Uploading...
+                                </>
+                            ) : (
+                                <>
+                                    <Upload size={20}/>
+                                    Upload foto's
+                                </>
+                            )}
+                        </button>
+                    </form>
+                </section>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                     {data.photos.map(photo => (
