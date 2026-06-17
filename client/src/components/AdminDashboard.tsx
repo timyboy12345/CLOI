@@ -78,7 +78,7 @@ const AdminDashboard = () => {
       setAlbumName('');
       fetchAlbums();
       if (res.data?.id) {
-        navigate(`/albums/${res.data.id}`);
+        navigate(`/admin/edit/${res.data.id}`);
       }
     } catch (err) {
       alert('Failed to create album. Please ensure you are logged in.');
