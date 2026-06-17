@@ -19,7 +19,7 @@ function App() {
           onClose={() => setIsMobileSidebarOpen(false)}
         />
         <div className="flex-1 md:ml-64">
-          <header className="md:hidden sticky top-0 z-30 bg-white border-b border-gray-200 px-4 py-3">
+          <header className="md:hidden flex flex-row sticky top-0 z-20 bg-white border-b border-gray-200 px-4 py-3">
             <button
               onClick={() => setIsMobileSidebarOpen((prev) => !prev)}
               className="inline-flex cursor-pointer items-center gap-2 text-gray-700 hover:text-red-900"

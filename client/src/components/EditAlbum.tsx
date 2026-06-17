@@ -301,7 +301,9 @@ const EditAlbum = () => {
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-1">
                     {data.photos.map(photo => (
                         <div key={photo.id}
-                             className="group relative aspect-square overflow-hidden bg-gray-50">
+                             className="group relative aspect-square overflow-hidden bg-gray-50"
+                             onClick={() => togglePhotoSelection(photo.id)}
+                        >
                             <label className="absolute top-2 left-2 z-10">
                                 <input
                                     type="checkbox"
@@ -318,7 +320,7 @@ const EditAlbum = () => {
                             <div
                                 className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                 <button
-                                    onClick={() => handleDeletePhoto(photo.id)}
+                                    onClick={(e) => {e.stopPropagation(); handleDeletePhoto(photo.id)}}
                                     className="p-3 cursor-pointer bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors"
                                     title="Delete Photo"
                                 >
