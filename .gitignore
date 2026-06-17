@@ -1,4 +1,5 @@
-.env
+.env.client
+.env.server
 */.env
 /uploads
 /photos.db

@@ -10,6 +10,8 @@ services:
       CLIENT_PORT: ${CLIENT_PORT}
       CLIENT_URL: ${CLIENT_URL}
       SERVER_URL: ${SERVER_URL}
+    env_file:
+      - .env.client
 
   server:
     build: ./server
@@ -19,13 +21,8 @@ services:
       - ./uploads:/app/uploads
       - ./photos.db:/app/photos.db
     restart: always
-    environment:
-      SERVER_URL: ${SERVER_URL}
-      SERVER_PORT: ${SERVER_PORT}
-      SERVER_SESSION_SECRET: ${SERVER_SECRET}
-      SERVER_OIDC_ISSUER: ${SERVER_OIDC_ISSUER}
-      SERVER_OIDC_CLIENT_ID: ${SERVER_OIDC_CLIENT_ID}
-      SERVER_OIDC_CLIENT_SECRET: ${SERVER_OIDC_CLIENT_SECRET}
+    env_file:
+      - .env.server
 
 
 volumes:
