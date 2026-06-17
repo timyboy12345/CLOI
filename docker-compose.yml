@@ -12,12 +12,10 @@ services:
     ports:
       - "3001:3001"
     volumes:
-      - ./uploads:/app/uploads
-      - ./photos.db:/app/photos.db
+      - sqlite_data:/data
     restart: always
     environment:
       - ./server/.env
 
 volumes:
-  uploads:
-  db:
+  sqlite_data:
