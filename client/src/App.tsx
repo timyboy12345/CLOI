@@ -18,7 +18,7 @@ function App() {
           isOpen={isMobileSidebarOpen}
           onClose={() => setIsMobileSidebarOpen(false)}
         />
-        <div className="flex-1 md:ml-64">
+        <div className="flex-1 md:ml-64 min-w-0">
           <header className="md:hidden flex flex-row sticky top-0 z-20 bg-white border-b border-gray-200 px-4 py-3">
             <button
               onClick={() => setIsMobileSidebarOpen((prev) => !prev)}

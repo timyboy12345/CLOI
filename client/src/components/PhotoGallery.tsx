@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import api, { getUploadsUrl } from '../api';
-import { ArrowLeft, Image as ImageIcon, X, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
+import { ArrowLeft, Image as ImageIcon, X, ChevronLeft, ChevronRight, Lock, Info } from 'lucide-react';
 import { isAxiosError } from 'axios';
 
 interface Photo {
   id: number;
   filename: string;
+  metadata?: string;
 }
 
 interface AlbumData {
@@ -23,6 +24,7 @@ const PhotoGallery = () => {
   const [password, setPassword] = useState(searchParams.get('pass') || '');
   const [passwordError, setPasswordError] = useState('');
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [showMetadata, setShowMetadata] = useState(false);
 
   const fetchAlbum = useCallback(async () => {
     setLoading(true);
@@ -74,6 +76,7 @@ const PhotoGallery = () => {
 
   const closeSlideshow = useCallback(() => {
     setSelectedIndex(null);
+    setShowMetadata(false);
   }, []);
 
   useEffect(() => {
@@ -202,6 +205,16 @@ const PhotoGallery = () => {
           </button>
 
           <button
+            onClick={() => setShowMetadata(!showMetadata)}
+            className={`absolute cursor-pointer top-6 left-6 p-2 rounded-full transition-all z-50 ${
+                showMetadata ? 'text-white bg-red-600' : 'text-white/70 hover:text-white bg-white/10 hover:bg-white/20'
+            }`}
+            title="Foto informatie"
+          >
+            <Info size={24} />
+          </button>
+
+          <button
             onClick={prevPhoto}
             className="absolute cursor-pointer left-6 p-3 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-all z-50"
           >
@@ -221,6 +234,81 @@ const PhotoGallery = () => {
           >
             <ChevronRight size={32} />
           </button>
+
+          {showMetadata && data.photos[selectedIndex].metadata && (
+              <div className="absolute top-20 left-6 z-50 w-72 max-h-[70vh] overflow-y-auto bg-black/80 backdrop-blur-md rounded-2xl border border-white/10 p-6 text-white animate-in slide-in-from-left-4 duration-200">
+                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <Info size={18} className="text-red-500" />
+                      Foto Informatie
+                  </h3>
+                  <div className="space-y-4">
+                      {(() => {
+                          try {
+                              const meta = JSON.parse(data.photos[selectedIndex].metadata || '{}');
+                              const formatExposure = (exposure: any) => {
+                                  if (!exposure) return null;
+                                  const parts = [];
+                                  if (exposure.time) {
+                                      const time = exposure.time < 1 ? `1/${Math.round(1/exposure.time)}` : exposure.time;
+                                      parts.push(`${time}s`);
+                                  }
+                                  if (exposure.fNumber) parts.push(`f/${exposure.fNumber}`);
+                                  if (exposure.iso) parts.push(`ISO ${exposure.iso}`);
+                                  return parts.join(' · ');
+                              };
+
+                              return (
+                                  <>
+                                      <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-sm">
+                                          <div className="text-white/50 text-xs">Afmetingen</div>
+                                          <div className="text-right font-medium text-xs">{meta.width} × {meta.height} px</div>
+                                          
+                                          <div className="text-white/50 text-xs">Formaat</div>
+                                          <div className="text-right font-medium uppercase text-xs">{meta.format}</div>
+
+                                          {meta.camera && (meta.camera.make || meta.camera.model) && (
+                                              <>
+                                                  <div className="text-white/50 text-xs border-t border-white/10 pt-3 mt-1">Camera</div>
+                                                  <div className="text-right font-medium text-xs border-t border-white/10 pt-3 mt-1">
+                                                      {meta.camera.make} {meta.camera.model}
+                                                  </div>
+                                              </>
+                                          )}
+
+                                          {meta.exposure && (meta.exposure.time || meta.exposure.fNumber || meta.exposure.iso) && (
+                                              <>
+                                                  <div className="text-white/50 text-xs">Belichting</div>
+                                                  <div className="text-right font-medium text-xs">
+                                                      {formatExposure(meta.exposure)}
+                                                  </div>
+                                              </>
+                                          )}
+
+                                          {meta.exposure?.focalLength && (
+                                              <>
+                                                  <div className="text-white/50 text-xs">Brandpuntsafstand</div>
+                                                  <div className="text-right font-medium text-xs">{meta.exposure.focalLength}mm</div>
+                                              </>
+                                          )}
+
+                                          {meta.date && (
+                                              <>
+                                                  <div className="text-white/50 text-xs border-t border-white/10 pt-3 mt-1">Gemaakt op</div>
+                                                  <div className="text-right font-medium text-xs border-t border-white/10 pt-3 mt-1">
+                                                      {new Date(meta.date).toLocaleString()}
+                                                  </div>
+                                              </>
+                                          )}
+                                      </div>
+                                  </>
+                              );
+                          } catch (e) {
+                              return <p className="text-sm text-white/50 italic">Geen metadata beschikbaar.</p>;
+                          }
+                      })()}
+                  </div>
+              </div>
+          )}
 
           <div className="text-nowrap absolute flex flex-row gap-2 lg:gap-4 bottom-6 left-1/2 -translate-x-1/2">
               <div className="px-4 py-2 bg-black/40 backdrop-blur-md rounded-full text-white/80 text-sm font-medium">

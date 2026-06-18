@@ -8,6 +8,7 @@ interface User {
   id?: number;
   email?: string;
   name?: string;
+  role?: string;
   last_login?: string;
 }
 
@@ -18,6 +19,7 @@ const AdminDashboard = () => {
   const [albumName, setAlbumName] = useState('');
   const [albums, setAlbums] = useState<{ id: number; name: string; date: string; photo_count?: number }[]>([]);
   const [deletingAlbumId, setDeletingAlbumId] = useState<number | null>(null);
+  const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -106,6 +108,20 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleUpdateRole = async (userId: number, newRole: string) => {
+    setUpdatingUserId(userId);
+    try {
+      await api.patch(`/users/${userId}/role`, { role: newRole });
+      await fetchUsers();
+      // If updating self, we might want to refresh current user state, but since this is admin dashboard
+      // and only admins can reach here, demoting self would kick you out on next reload/navigation
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to update user role.');
+    } finally {
+      setUpdatingUserId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -135,9 +151,33 @@ const AdminDashboard = () => {
     );
   }
 
+  if (user.role !== 'admin') {
+    return (
+      <div className="max-w-md mx-auto mt-10">
+        <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center">
+          <div className="w-16 h-16 bg-amber-50 text-amber-900 rounded-full flex items-center justify-center mx-auto mb-6">
+            <UserIcon size={32} />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Toegang Geweigerd</h1>
+          <p className="text-gray-500 mb-8">
+            Je bent ingelogd als <strong>{user.email}</strong>, maar je hebt geen admin rechten.
+            Vraag een bestaande admin om je account te activeren.
+          </p>
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl transition-colors cursor-pointer"
+          >
+            <LogOut size={20} />
+            Uitloggen
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto space-y-8">
-      <div className="flex justify-between items-center bg-white p-6 rounded-2xl border border-gray-200">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center bg-white p-6 rounded-2xl border border-gray-200">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-red-50 text-red-900 rounded-full flex items-center justify-center font-bold text-xl">
             {(user.name || user.email || 'A')[0].toUpperCase()}
@@ -149,7 +189,7 @@ const AdminDashboard = () => {
         </div>
         <button
           onClick={handleLogout}
-          className="flex items-center gap-2 cursor-pointer text-gray-500 hover:text-red-900 font-medium transition-colors"
+          className="self-end md:self-auto flex items-center gap-2 cursor-pointer text-gray-500 hover:text-red-900 font-medium transition-colors"
         >
           <LogOut size={20} />
           Uitloggen
@@ -158,7 +198,7 @@ const AdminDashboard = () => {
 
       <div className="grid grid-cols-1 gap-8">
         {/* Create Album Section */}
-        <section className="bg-white p-8 rounded-2xl border border-gray-200 space-y-6">
+        <section className="bg-white p-4 md:p-8 rounded-2xl border border-gray-200 space-y-6">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-red-50 text-red-900 rounded-lg">
               <FolderPlus size={24} />
@@ -189,7 +229,7 @@ const AdminDashboard = () => {
       </div>
 
       {/* Manage Albums Section */}
-      <section className="bg-white p-8 rounded-2xl border border-gray-200 space-y-6">
+      <section className="bg-white p-4 md:p-8 rounded-2xl border border-gray-200 space-y-6">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-red-50 text-red-900 rounded-lg">
             <Edit size={24} />
@@ -224,26 +264,27 @@ const AdminDashboard = () => {
       </section>
 
       {/* User Management Section */}
-      <section className="bg-white p-8 rounded-2xl border border-gray-200 space-y-6">
+      <section className="bg-white p-4 md:p-8 rounded-2xl border border-gray-200 space-y-6">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-red-50 text-red-900 rounded-lg">
             <UserIcon size={24} />
           </div>
           <h2 className="text-xl font-bold text-gray-900">Beheer Gebruikers</h2>
         </div>
-        <div className="overflow-x-auto -mx-8 p-8">
-          <table className="w-full text-left">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left min-w-[600px]">
             <thead>
               <tr className="border-b border-gray-100">
-                <th className="pb-4 font-semibold text-gray-600">User</th>
-                <th className="pb-4 font-semibold text-gray-600">Email</th>
-                <th className="pb-4 font-semibold text-gray-600 text-right">Laatste login</th>
+                <th className="pb-4 px-4 font-semibold text-gray-600 whitespace-nowrap">User</th>
+                <th className="pb-4 px-4 font-semibold text-gray-600 whitespace-nowrap">Email</th>
+                <th className="pb-4 px-4 font-semibold text-gray-600 whitespace-nowrap">Rol</th>
+                <th className="pb-4 px-4 font-semibold text-gray-600 text-right whitespace-nowrap">Laatste login</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {users.map((u) => (
                 <tr key={u.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="py-4">
+                  <td className="py-4 px-4 whitespace-nowrap">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center font-medium text-xs">
                         {(u.name || u.email || 'U')[0].toUpperCase()}
@@ -251,8 +292,24 @@ const AdminDashboard = () => {
                       <span className="font-medium text-gray-900">{u.name}</span>
                     </div>
                   </td>
-                  <td className="py-4 text-gray-500">{u.email}</td>
-                  <td className="py-4 text-right text-gray-500 text-sm">
+                  <td className="py-4 px-4 text-gray-500 whitespace-nowrap">{u.email}</td>
+                  <td className="py-4 px-4 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                       <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase ${u.role === 'admin' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-600'}`}>
+                         {u.role}
+                       </span>
+                       {u.id !== undefined && (
+                         <button
+                           onClick={() => handleUpdateRole(u.id!, u.role === 'admin' ? 'guest' : 'admin')}
+                           disabled={updatingUserId === u.id}
+                           className="text-xs text-red-600 hover:underline cursor-pointer disabled:opacity-50"
+                         >
+                           {updatingUserId === u.id ? 'Updating...' : u.role === 'admin' ? 'Maak guest' : 'Maak admin'}
+                         </button>
+                       )}
+                    </div>
+                  </td>
+                  <td className="py-4 px-4 text-right text-gray-500 text-sm whitespace-nowrap">
                     {u.last_login ? new Date(u.last_login).toLocaleString() : 'Never'}
                   </td>
                 </tr>
