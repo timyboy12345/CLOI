@@ -1,7 +1,17 @@
 import {useState, useEffect} from 'react';
 import {useParams, Link} from 'react-router-dom';
 import api, {getUploadsUrl} from '../api';
-import {ArrowLeft, Trash2, Save, Calendar as CalendarIcon, Loader2, Image as ImageIcon, Upload} from 'lucide-react';
+import {
+    ArrowLeft,
+    Trash2,
+    Save,
+    Calendar as CalendarIcon,
+    Loader2,
+    Image as ImageIcon,
+    Upload,
+    LogOut,
+    User as UserIcon
+} from 'lucide-react';
 
 interface Photo {
     id: number;
@@ -9,27 +19,42 @@ interface Photo {
 }
 
 interface AlbumData {
-    album: { id: number; name: string; date: string };
+    album: { id: number; name: string; date: string; has_password?: number };
     photos: Photo[];
+}
+
+interface User {
+    id?: number;
+    email?: string;
+    name?: string;
+    role?: string;
 }
 
 const EditAlbum = () => {
     const {id} = useParams<{ id: string }>();
     const [data, setData] = useState<AlbumData | null>(null);
+    const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [albumDate, setAlbumDate] = useState('');
     const [albumName, setAlbumName] = useState('');
+    const [albumPassword, setAlbumPassword] = useState('');
+    const [removePassword, setRemovePassword] = useState(false);
+    const [hasPassword, setHasPassword] = useState(false);
     const [files, setFiles] = useState<FileList | null>(null);
     const [uploadTotal, setUploadTotal] = useState(0);
     const [uploadedCount, setUploadedCount] = useState(0);
     const [uploadMessage, setUploadMessage] = useState<string | null>(null);
     const [collapsed, setCollapsed] = useState(true);
     const [selectedPhotoIds, setSelectedPhotoIds] = useState<number[]>([]);
+    const [isDragging, setIsDragging] = useState(false);
 
     useEffect(() => {
-        fetchAlbum();
+        const init = async () => {
+            await Promise.all([fetchAlbum(), checkAuth()]);
+        };
+        init();
     }, [id]);
 
     useEffect(() => {
@@ -38,12 +63,51 @@ const EditAlbum = () => {
         }
     }, [data]);
 
+    const checkAuth = async () => {
+        try {
+            const res = await api.get('/auth/me');
+            setUser(res.data);
+        } catch (err) {
+            setUser(null);
+        }
+    };
+
+    const handleLogout = async () => {
+        try {
+            await api.post('/auth/logout', {});
+            window.location.href = '/admin';
+        } catch (err) {
+            console.error('Logout failed', err);
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            setFiles(e.dataTransfer.files);
+        }
+    };
+
     const fetchAlbum = async () => {
         try {
             const res = await api.get(`/albums/${id}`);
             setData(res.data);
             setAlbumDate(new Date(res.data.album.date).toISOString().split('T')[0]);
             setAlbumName(res.data.album.name);
+            setHasPassword(Boolean(res.data.album.has_password));
+            setAlbumPassword('');
+            setRemovePassword(false);
             setSelectedPhotoIds([]);
         } catch (err) {
             console.error('Failed to fetch album', err);
@@ -56,10 +120,27 @@ const EditAlbum = () => {
         e.preventDefault();
         setSaving(true);
         try {
-            await api.patch(`/albums/${id}`, {
+            const payload: { name: string; date: string; password?: string } = {
                 name: albumName,
                 date: albumDate
+            };
+
+            if (removePassword) {
+                payload.password = '';
+            } else if (albumPassword.trim()) {
+                payload.password = albumPassword;
+            }
+
+            await api.patch(`/albums/${id}`, {
+                ...payload
             }, {withCredentials: true});
+            if (removePassword) {
+                setHasPassword(false);
+            } else if (albumPassword.trim()) {
+                setHasPassword(true);
+            }
+            setAlbumPassword('');
+            setRemovePassword(false);
             alert('Album updated successfully!');
         } catch (err) {
             alert('Failed to update album.');
@@ -155,6 +236,32 @@ const EditAlbum = () => {
         </div>
     );
 
+    if (!user || user.role !== 'admin') {
+        return (
+            <div className="max-w-md mx-auto mt-10">
+                <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center">
+                    <div
+                        className="w-16 h-16 bg-amber-50 text-amber-900 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <UserIcon size={32}/>
+                    </div>
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Toegang Geweigerd</h1>
+                    <p className="text-gray-500 mb-8">
+                        {user
+                            ? <>Je bent ingelogd als <strong>{user.email}</strong>, maar je hebt geen admin rechten.</>
+                            : <>Log in om dit album te bewerken.</>
+                        }
+                    </p>
+                    <button
+                        onClick={user ? handleLogout : () => window.location.href = '/admin'}
+                        className="w-full flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-xl transition-colors cursor-pointer"
+                    >
+                        {user ? <><LogOut size={20}/> Uitloggen</> : 'Naar login'}
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     if (!data) return <div className="text-center py-10">Album not found.</div>;
 
     return (
@@ -208,6 +315,33 @@ const EditAlbum = () => {
                                         />
                                     </div>
                                 </div>
+                                <div className="space-y-2 md:col-span-2">
+                                    <label className="text-sm font-medium text-gray-700">Album wachtwoord</label>
+                                    <input
+                                        type="password"
+                                        value={albumPassword}
+                                        onChange={(e) => {
+                                            setAlbumPassword(e.target.value);
+                                            if (e.target.value) setRemovePassword(false);
+                                        }}
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-900 focus:border-transparent transition-all"
+                                        placeholder={hasPassword ? 'Laat leeg om huidige wachtwoord te behouden' : 'Stel een wachtwoord in (optioneel)'}
+                                    />
+                                    {hasPassword && (
+                                        <label className="inline-flex items-center gap-2 text-sm text-gray-600">
+                                            <input
+                                                type="checkbox"
+                                                checked={removePassword}
+                                                onChange={(e) => {
+                                                    setRemovePassword(e.target.checked);
+                                                    if (e.target.checked) setAlbumPassword('');
+                                                }}
+                                                className="h-4 w-4 accent-red-600"
+                                            />
+                                            Verwijder huidig wachtwoord
+                                        </label>
+                                    )}
+                                </div>
                             </div>
                             <button
                                 type="submit"
@@ -219,51 +353,87 @@ const EditAlbum = () => {
                             </button>
                         </form>
 
-                        <form onSubmit={handleUpload} className="space-y-4 lg:flex-1">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">Selecteer foto's</label>
+                        <form onSubmit={handleUpload} className="lg:flex-1 flex flex-col min-h-[300px]">
+                            <div
+                                onDragOver={handleDragOver}
+                                onDragLeave={handleDragLeave}
+                                onDrop={handleDrop}
+                                className={`flex-1 flex flex-col items-center justify-center border-2 border-dashed rounded-2xl transition-all ${
+                                    isDragging
+                                        ? 'border-red-600 bg-red-50 shadow-inner'
+                                        : files && files.length > 0
+                                            ? 'border-green-500 bg-green-50'
+                                            : 'border-gray-200 hover:border-red-900 hover:bg-gray-50'
+                                }`}
+                            >
                                 <input
                                     type="file"
                                     multiple
+                                    id="file-upload"
                                     accept="image/*,video/*"
                                     onChange={(e) => setFiles(e.target.files)}
-                                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-red-50 file:text-red-900 hover:file:bg-red-100 cursor-pointer"
-                                    required
+                                    className="hidden"
                                 />
-                            </div>
-                            {uploading && uploadTotal > 0 && (
-                                <div className="space-y-2">
-                                    <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-red-600 transition-all"
-                                            style={{width: `${(uploadedCount / uploadTotal) * 100}%`}}
-                                        />
+                                <label
+                                    htmlFor="file-upload"
+                                    className="w-full h-full flex flex-col items-center justify-center cursor-pointer p-6 text-center"
+                                >
+                                    <Upload
+                                        size={48}
+                                        className={`mb-4 transition-colors ${
+                                            isDragging ? 'text-red-600' : files && files.length > 0 ? 'text-green-600' : 'text-gray-400'
+                                        }`}
+                                    />
+                                    <div className="space-y-1">
+                                        <p className="text-lg font-semibold text-gray-900">
+                                            {files && files.length > 0
+                                                ? `${files.length} bestand(en) geselecteerd`
+                                                : "Sleep foto's hierheen"}
+                                        </p>
+                                        <p className="text-sm text-gray-500">
+                                            of klik om bestanden te selecteren
+                                        </p>
                                     </div>
-                                    <p className="text-sm text-gray-600">
-                                        {uploadedCount}/{uploadTotal} foto's geüpload ·
-                                        Nog {uploadTotal - uploadedCount} te gaan
-                                    </p>
+                                </label>
+                            </div>
+
+                            {(files && files.length > 0 || uploading) && (
+                                <div className="mt-4 space-y-4">
+                                    {uploading && uploadTotal > 0 && (
+                                        <div className="space-y-2">
+                                            <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+                                                <div
+                                                    className="h-full bg-red-600 transition-all"
+                                                    style={{width: `${(uploadedCount / uploadTotal) * 100}%`}}
+                                                />
+                                            </div>
+                                            <p className="text-sm text-gray-600">
+                                                {uploadedCount}/{uploadTotal} foto's geüpload ·
+                                                Nog {uploadTotal - uploadedCount} te gaan
+                                            </p>
+                                        </div>
+                                    )}
+                                    <button
+                                        type="submit"
+                                        className="w-full flex cursor-pointer items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white font-semibold py-3 px-6 rounded-xl transition-colors shadow-sm"
+                                        disabled={uploading}
+                                    >
+                                        {uploading ? (
+                                            <>
+                                                <Loader2 className="animate-spin" size={20}/>
+                                                Bezig met uploaden... ({uploadedCount}/{uploadTotal})
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Upload size={20}/>
+                                                Start Upload
+                                            </>
+                                        )}
+                                    </button>
                                 </div>
                             )}
-                            <button
-                                type="submit"
-                                className="flex cursor-pointer items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
-                                disabled={uploading}
-                            >
-                                {uploading ? (
-                                    <>
-                                        <Loader2 className="animate-spin" size={20}/>
-                                        Uploading...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Upload size={20}/>
-                                        Upload foto's
-                                    </>
-                                )}
-                            </button>
                             {uploadMessage && (
-                                <p className="text-sm text-green-600">{uploadMessage}</p>
+                                <p className="mt-2 text-sm text-green-600 text-center font-medium">{uploadMessage}</p>
                             )}
                         </form>
                     </div>
@@ -271,30 +441,34 @@ const EditAlbum = () => {
             </section>
 
             <section className="space-y-4">
-                <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                        <ImageIcon size={24} className="text-red-900"/>
-                        Manage Photos ({data.photos.length})
-                    </h2>
-                    {data.photos.length > 0 && (
-                        <div className="flex items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={toggleSelectAll}
-                                className="px-3 py-2 cursor-pointer text-sm rounded-lg border border-gray-200 hover:bg-gray-50"
-                            >
-                                {selectedPhotoIds.length === data.photos.length ? 'Deselect all' : 'Select all'}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleDeleteSelectedPhotos}
-                                disabled={selectedPhotoIds.length === 0}
-                                className="px-3 py-2 cursor-pointer text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed"
-                            >
-                                Delete selected ({selectedPhotoIds.length})
-                            </button>
-                        </div>
-                    )}
+                <div className="flex flex-col md:flex-row gap-2 md:items-center md:justify-between">
+                    <div>
+                        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                            <ImageIcon size={24} className="text-red-900"/>
+                            Manage Photos ({data.photos.length})
+                        </h2>
+                    </div>
+                    <div>
+                        {data.photos.length > 0 && (
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={toggleSelectAll}
+                                    className="px-3 py-2 cursor-pointer text-sm rounded-lg border border-gray-200 hover:bg-gray-50"
+                                >
+                                    {selectedPhotoIds.length === data.photos.length ? 'Deselect all' : 'Select all'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleDeleteSelectedPhotos}
+                                    disabled={selectedPhotoIds.length === 0}
+                                    className="px-3 py-2 cursor-pointer text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed"
+                                >
+                                    Delete selected ({selectedPhotoIds.length})
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
 
@@ -314,13 +488,16 @@ const EditAlbum = () => {
                             </label>
                             <img
                                 src={getUploadsUrl(photo.filename)}
-                                alt="Album photo"
-                                className="w-full h-full object-cover"
+                                alt={`Foto ${photo.id}`}
+                                className="w-full h-full object-cover text-center leading-[150px]"
                             />
                             <div
                                 className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                 <button
-                                    onClick={(e) => {e.stopPropagation(); handleDeletePhoto(photo.id)}}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeletePhoto(photo.id)
+                                    }}
                                     className="p-3 cursor-pointer bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors"
                                     title="Delete Photo"
                                 >

@@ -8,7 +8,9 @@ import session from 'express-session';
 import { rateLimit } from 'express-rate-limit';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import sharp from 'sharp';
+import exifr from 'exifr';
 import { Issuer, Strategy, Client } from 'openid-client';
 import db from './db';
 
@@ -46,6 +48,40 @@ const processPhotoVariants = async (relativeFilename: string) => {
     const { thumbnailPath, compressedPath } = getVariantPaths(sourcePath);
     const sourceBuffer = await fs.promises.readFile(sourcePath);
     const baseImage = sharp(sourceBuffer, { failOn: 'none' }).rotate();
+
+    // Ensure metadata is in DB
+    const photoRecord = db.prepare('SELECT id, metadata FROM photos WHERE filename = ?').get(relativeFilename) as { id: number, metadata: string | null } | undefined;
+    if (photoRecord && (!photoRecord.metadata || photoRecord.metadata === 'null')) {
+      console.log(' - Updating missing metadata for:', relativeFilename);
+      try {
+        const [sharpMeta, exifrMeta] = await Promise.all([
+          baseImage.metadata(),
+          exifr.parse(sourcePath, { pick: ['Make', 'Model', 'DateTimeOriginal', 'ExposureTime', 'FNumber', 'ISO', 'FocalLength'] }).catch(() => null)
+        ]);
+
+        const refinedMeta = {
+          width: sharpMeta.width,
+          height: sharpMeta.height,
+          format: sharpMeta.format,
+          space: sharpMeta.space,
+          density: sharpMeta.density,
+          camera: exifrMeta ? {
+            make: exifrMeta.Make,
+            model: exifrMeta.Model,
+          } : null,
+          exposure: exifrMeta ? {
+            time: exifrMeta.ExposureTime,
+            fNumber: exifrMeta.FNumber,
+            iso: exifrMeta.ISO,
+            focalLength: exifrMeta.FocalLength
+          } : null,
+          date: exifrMeta?.DateTimeOriginal
+        };
+        db.prepare('UPDATE photos SET metadata = ? WHERE id = ?').run(JSON.stringify(refinedMeta), photoRecord.id);
+      } catch (e) {
+        console.error('Failed to update metadata in background for', relativeFilename, e);
+      }
+    }
 
     if (!fs.existsSync(thumbnailPath)) {
       console.log(' - Generating thumbnail for:', relativeFilename);
@@ -129,10 +165,28 @@ initOidc();
 const sanitizeFolderName = (name: string) =>
   name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
+const hashAlbumPassword = (password: string) => {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+};
+
+const verifyAlbumPassword = (password: string, storedHash: string) => {
+  const [salt, hashHex] = storedHash.split(':');
+  if (!salt || !hashHex) return false;
+
+  const storedBuffer = Buffer.from(hashHex, 'hex');
+  const suppliedBuffer = crypto.scryptSync(password, salt, storedBuffer.length);
+  return crypto.timingSafeEqual(storedBuffer, suppliedBuffer);
+};
+
 // Auth Middleware
 const isAuthenticated = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  if ((req.session as any).user) {
+  const user = (req.session as any).user;
+  if (user && user.role === 'admin') {
     next();
+  } else if (user) {
+    res.status(403).json({ error: 'Forbidden: Admin access required' });
   } else {
     res.status(401).json({ error: 'Unauthorized' });
   }
@@ -141,6 +195,14 @@ const isAuthenticated = (req: express.Request, res: express.Response, next: expr
 const mutationRateLimit = rateLimit({
   windowMs: 60 * 1000,
   limit: 120,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many requests' }
+});
+
+const albumAccessRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   message: { error: 'Too many requests' }
@@ -166,15 +228,23 @@ app.get('/api/auth/callback', async (req, res) => {
     const email = userinfo.email;
     const name = (userinfo as any).name || (userinfo as any).preferred_username || email;
 
+    const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
+    const role = userCount.count === 0 ? 'admin' : 'guest';
+
     db.prepare(`
-      INSERT INTO users (email, name, last_login) 
-      VALUES (?, ?, CURRENT_TIMESTAMP)
+      INSERT INTO users (email, name, role, last_login) 
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(email) DO UPDATE SET 
         name = excluded.name,
         last_login = CURRENT_TIMESTAMP
-    `).run(email, name);
+    `).run(email, name, role);
 
-    (req.session as any).user = userinfo;
+    const dbUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+
+    (req.session as any).user = {
+      ...userinfo,
+      role: dbUser.role
+    };
     res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/admin`);
   } catch (err) {
     console.error('Auth callback failed:', err);
@@ -193,14 +263,37 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 app.get('/api/users', isAuthenticated, (req, res) => {
-  const users = db.prepare('SELECT id, email, name, last_login FROM users ORDER BY last_login DESC').all();
+  const users = db.prepare('SELECT id, email, name, role, last_login FROM users ORDER BY last_login DESC').all();
   res.json(users);
+});
+
+app.patch('/api/users/:id/role', isAuthenticated, mutationRateLimit, (req, res) => {
+  const { role } = req.body;
+  if (!['admin', 'guest'].includes(role)) {
+    return res.status(400).json({ error: 'Invalid role' });
+  }
+
+  // Prevent self-demotion if desired, or just allow it
+  const currentUser = (req.session as any).user;
+  const targetUser = db.prepare('SELECT email FROM users WHERE id = ?').get(req.params.id) as any;
+
+  if (targetUser && targetUser.email === currentUser.email && role !== 'admin') {
+     // Optional: check if there are other admins before allowing self-demotion
+     const otherAdmins = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'admin' AND id != ?").get(req.params.id) as { count: number };
+     if (otherAdmins.count === 0) {
+       return res.status(400).json({ error: 'Cannot demote the last admin' });
+     }
+  }
+
+  db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, req.params.id);
+  res.json({ success: true });
 });
 
 // --- Gallery Routes ---
 app.get('/api/albums', (req, res) => {
   const albums = db.prepare(`
-    SELECT a.*,
+    SELECT a.id, a.name, a.date,
+      CASE WHEN a.password_hash IS NULL OR a.password_hash = '' THEN 0 ELSE 1 END as has_password,
       (SELECT filename FROM photos WHERE album_id = a.id LIMIT 1) as cover_photo,
       (SELECT COUNT(*) FROM photos WHERE album_id = a.id) as photo_count
     FROM albums a 
@@ -209,10 +302,36 @@ app.get('/api/albums', (req, res) => {
   res.json(albums);
 });
 
-app.get('/api/albums/:id', (req, res) => {
-  const album = db.prepare('SELECT * FROM albums WHERE id = ?').get(req.params.id);
+app.get('/api/albums/:id', albumAccessRateLimit, (req, res) => {
+  const album = db.prepare(`
+    SELECT *,
+      CASE WHEN password_hash IS NULL OR password_hash = '' THEN 0 ELSE 1 END as has_password
+    FROM albums
+    WHERE id = ?
+  `).get(req.params.id) as any;
+  if (!album) {
+    return res.status(404).json({ error: 'Album not found' });
+  }
+
+  const user = (req.session as any).user;
+  const requiresPassword = Boolean(album.password_hash);
+  if (requiresPassword && !user) {
+    const pass = typeof req.query.pass === 'string' ? req.query.pass : '';
+    if (!pass || !verifyAlbumPassword(pass, album.password_hash)) {
+      return res.status(403).json({ error: 'Album is password protected', requiresPassword: true });
+    }
+  }
+
   const photos = db.prepare('SELECT * FROM photos WHERE album_id = ?').all(req.params.id);
-  res.json({ album, photos });
+  res.json({
+    album: {
+      id: album.id,
+      name: album.name,
+      date: album.date,
+      has_password: album.has_password
+    },
+    photos
+  });
 });
 
 // --- Protected Routes ---
@@ -230,19 +349,36 @@ const storage = multer.diskStorage({
     }
     cb(null, albumDir);
   },
-  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${crypto.randomUUID()}${ext}`);
+  }
 });
 const upload = multer({ storage });
 
-app.post('/api/albums', isAuthenticated, (req, res) => {
-  const { name } = req.body;
-  const info = db.prepare('INSERT INTO albums (name) VALUES (?)').run(name);
+app.post('/api/albums', isAuthenticated, mutationRateLimit, (req, res) => {
+  const { name, password } = req.body;
+  const passwordHash = typeof password === 'string' && password.trim() ? hashAlbumPassword(password) : null;
+  const info = db.prepare('INSERT INTO albums (name, password_hash) VALUES (?, ?)').run(name, passwordHash);
   res.json({ id: info.lastInsertRowid, name });
 });
 
-app.patch('/api/albums/:id', isAuthenticated, (req, res) => {
-  const { date, name } = req.body;
-  db.prepare('UPDATE albums SET date = ?, name = ? WHERE id = ?').run(date, name, req.params.id);
+app.patch('/api/albums/:id', isAuthenticated, mutationRateLimit, (req, res) => {
+  const { date, name, password } = req.body;
+  const updates: string[] = ['date = ?', 'name = ?'];
+  const values: any[] = [date, name];
+
+  if (typeof password === 'string') {
+    if (password.trim()) {
+      updates.push('password_hash = ?');
+      values.push(hashAlbumPassword(password));
+    } else {
+      updates.push('password_hash = NULL');
+    }
+  }
+
+  values.push(req.params.id);
+  db.prepare(`UPDATE albums SET ${updates.join(', ')} WHERE id = ?`).run(...values);
   res.json({ success: true });
 });
 
@@ -286,24 +422,62 @@ app.delete('/api/photos/:id', isAuthenticated, mutationRateLimit, (req, res) => 
   res.json({ success: true });
 });
 
-app.post('/api/albums/:id/upload', isAuthenticated, mutationRateLimit, upload.array('photos'), (req, res) => {
+app.post('/api/albums/:id/upload', isAuthenticated, mutationRateLimit, upload.array('photos'), async (req, res) => {
   const albumId = req.params.id;
   const files = req.files as Express.Multer.File[];
 
   const album = db.prepare('SELECT name FROM albums WHERE id = ?').get(albumId) as any;
   const folderName = sanitizeFolderName(album.name);
 
-  const insert = db.prepare('INSERT INTO photos (album_id, filename) VALUES (?, ?)');
-  const transaction = db.transaction((photos: any[]) => {
-    for (const photo of photos) {
-      // Store relative path (folder/filename) in DB
-      insert.run(albumId, `${folderName}/${photo.filename}`);
-    }
-  });
+  try {
+    const photosWithMetadata = await Promise.all(files.map(async (file) => {
+      let metadata = null;
+      try {
+        const [sharpMeta, exifrMeta] = await Promise.all([
+          sharp(file.path).metadata(),
+          exifr.parse(file.path, { pick: ['Make', 'Model', 'DateTimeOriginal', 'ExposureTime', 'FNumber', 'ISO', 'FocalLength'] }).catch(() => null)
+        ]);
 
-  transaction(files);
-  processPhotosInBackground(files.map((photo) => `${folderName}/${photo.filename}`));
-  res.json({ success: true, count: files.length });
+        const refinedMeta = {
+          width: sharpMeta.width,
+          height: sharpMeta.height,
+          format: sharpMeta.format,
+          space: sharpMeta.space,
+          density: sharpMeta.density,
+          camera: exifrMeta ? {
+            make: exifrMeta.Make,
+            model: exifrMeta.Model,
+          } : null,
+          exposure: exifrMeta ? {
+            time: exifrMeta.ExposureTime,
+            fNumber: exifrMeta.FNumber,
+            iso: exifrMeta.ISO,
+            focalLength: exifrMeta.FocalLength
+          } : null,
+          date: exifrMeta?.DateTimeOriginal
+        };
+        metadata = JSON.stringify(refinedMeta);
+      } catch (e) {
+        console.error('Failed to extract metadata for', file.filename, e);
+      }
+      return { filename: file.filename, metadata };
+    }));
+
+    const insert = db.prepare('INSERT INTO photos (album_id, filename, metadata) VALUES (?, ?, ?)');
+    const transaction = db.transaction((photos: any[]) => {
+      for (const photo of photos) {
+        // Store relative path (folder/filename) in DB
+        insert.run(albumId, `${folderName}/${photo.filename}`, photo.metadata);
+      }
+    });
+
+    transaction(photosWithMetadata);
+    processPhotosInBackground(files.map((photo) => `${folderName}/${photo.filename}`));
+    res.json({ success: true, count: files.length });
+  } catch (err) {
+    console.error('Upload failed:', err);
+    res.status(500).json({ error: 'Failed to process upload' });
+  }
 });
 
 processAllPhotosInBackground();
