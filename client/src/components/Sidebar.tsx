@@ -53,6 +53,11 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
               {item.name}
             </NavLink>
           ))}
+
+          <div className="text-xs text-gray-600 absolute left-6 bottom-6">
+            <a target="_blank" className="hover:underline" href="https://github.com/timyboy12345/CLOI">Open Source op GitHub</a>
+            <div>Gemaakt door <a target="_blank" className="hover:underline" href="https://arendz.nl">Tim</a></div>
+          </div>
         </nav>
       </div>
     </>
