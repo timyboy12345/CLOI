@@ -45,7 +45,11 @@ const AdminDashboard = () => {
   const fetchAlbums = async () => {
     try {
       const res = await api.get('/albums');
-      setAlbums(res.data);
+
+      const sortedAlbums = res.data.sort((a: { date: string }, b: { date: string }) => {
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      });
+      setAlbums(sortedAlbums);
     } catch (err) {
       console.error('Failed to fetch albums', err);
     }
